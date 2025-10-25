@@ -153,6 +153,12 @@
                 apiSelect.appendChild(option);
             }
         }
+        
+        function ensureFullscreenAttributes(html) {
+            if (!html || typeof html !== 'string') return html;
+            // Inject all necessary fullscreen attributes for cross-browser/mobile compatibility
+            return html.replace(/<iframe\s/i, '<iframe allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" ');
+        }
 
         // ==============================================
         // Event Listeners
@@ -295,15 +301,16 @@
                         let embedContent = '<div class="video-player bg-gray-700 h-64 flex items-center justify-center rounded-lg"><p class="text-sm text-red-400 p-4">Embed code not found.</p></div>';
                         
                         if (video.embed_code) {
-                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${video.embed_code}</div>`;
+                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${ensureFullscreenAttributes(video.embed_code)}</div>`;
                         } else if (video.iframe) {
-                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${video.iframe}</div>`;
+                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${ensureFullscreenAttributes(video.iframe)}</div>`;
                         }
                         else if (video.embed_url) { 
-                             embedContent = `<div class="video-player rounded-lg overflow-hidden"><iframe src="${video.embed_url}" frameborder="0" scrolling="no" allowfullscreen></iframe></div>`;
+                             // Ensure all fullscreen attributes are present for the URL fallback
+                             embedContent = `<div class="video-player rounded-lg overflow-hidden"><iframe src="${video.embed_url}" frameborder="0" scrolling="no" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe></div>`;
                         }
                         else if (video.video_player) {
-                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${video.video_player}</div>`;
+                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${ensureFullscreenAttributes(video.video_player)}</div>`;
                         }
 
                         videoElement.innerHTML = `
