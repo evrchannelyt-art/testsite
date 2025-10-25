@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin-Only Video Viewer</title>
+    <style>
+        /* Basic CSS for the layout */
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        #login-view, #video-view { 
+            padding: 30px; 
+            border: 1px solid #ddd; 
+            max-width: 700px; 
+            margin: 20px auto; 
+            background-color: white; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #login-view { display: block; }
+        #video-view { display: none; } /* Hidden by default */
+        .video-item { margin-bottom: 25px; padding: 15px; border: 1px solid #eee; background-color: #fafafa; }
+        .video-player { width: 100%; height: 400px; margin-bottom: 15px; }
+        .error { color: #cc0000; font-weight: bold; }
+        input[type="text"], input[type="password"] { padding: 10px; margin-bottom: 10px; width: 90%; border: 1px solid #ccc; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        h1, h2 { color: #333; }
+    </style>
+</head>
+<body>
+
+    <div id="login-view">
+        <h1>Admin Login 🔑</h1>
+        <p>Use **admin** / **admin** to log in.</p>
+        <form id="loginForm">
+            <label for="username">Username:</label>
+            <input type="text" id="username" required><br>
+            <label for="password">Password:</label>
+            <input type="password" id="password" required><br><br>
+            <button type="submit">Login</button>
+            <p id="loginMessage" class="error"></p>
+        </form>
+    </div>
+
+    <div id="video-view">
+        <h1>Welcome, Admin! 📽️</h1>
+        <button id="logoutButton">Logout</button>
+        <hr>
+        <h2>Eporner Video Feed</h2>
+        <div id="videoContainer">
+            <p>Loading videos...</p>
+        </div>
+    </div>
+
+    <script>
+        // ==============================================
+        // 🚨 CONFIGURATION 🚨
+        // ==============================================
+        
+        // YOUR API KEY
+        const API_KEY = 'pAc_Uc2flizJZ15bUXweAQMQHBPjD3fRSG19bdecXj8'; 
+        
+        const SEARCH_URL = 'https://api.adultdatalink.com/eporner/search'; 
+        const DETAIL_URL = 'https://api.adultdatalink.com/eporner/video-information'; 
+        
+        const CREDENTIALS = {
+            username: 'admin',
+            password: 'admin'
+        };
+
+        // ==============================================
+        // DOM ELEMENTS AND VIEW SWITCHING
+        // ==============================================
+        const loginView = document.getElementById('login-view');
+        const videoView = document.getElementById('video-view');
+        const loginForm = document.getElementById('loginForm');
+        const logoutButton = document.getElementById('logoutButton');
+        const loginMessage = document.getElementById('loginMessage');
+        const videoContainer = document.getElementById('videoContainer');
+
+        function updateView() {
+            if (localStorage.getItem('loggedIn') === 'true') {
+                loginView.style.display = 'none';
+                videoView.style.display = 'block';
+                if (videoContainer.children.length <= 1 || videoContainer.querySelector('.error')) {
+                    fetchVideos();
+                }
+            } else {
+                loginView.style.display = 'block';
+                videoView.style.display = 'none';
+            }
+        }
+
+        loginForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            if (username === CREDENTIALS.username && password === CREDENTIALS.password) {
+                localStorage.setItem('loggedIn', 'true');
+                loginMessage.textContent = '';
+                updateView();
+            } else {
+                loginMessage.textContent = 'Invalid username or password.';
+            }
+        });
+
+        logoutButton.addEventListener('click', function() {
+            localStorage.removeItem('loggedIn');
+            loginMessage.textContent = 'Logged out successfully.';
+            videoContainer.innerHTML = '<p>Loading videos...</p>'; 
+            updateView();
+        });
+
+
+        // ==============================================
+        // 2. TWO-STEP API FETCH LOGIC (FIXED FOR 422)
+        // ==============================================
+
+        async function fetchVideos() {
+            videoContainer.innerHTML = '<p>Loading videos...</p>'; 
+
+            const requestOptions = {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${API_KEY}`, 
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            const searchParams = new URLSearchParams({
+                query: 'newest', 
+                limit: 5
+            }).toString();
+            
+            try {
+                // --- STEP 1: Get the list of video IDs ---
+                const searchResponse = await fetch(`${SEARCH_URL}?${searchParams}`, requestOptions);
+                
+                if (!searchResponse.ok) {
+                    const errorText = await searchResponse.text();
+                    throw new Error(`Search Error ${searchResponse.status}. Response: ${errorText.substring(0, 100)}...`);
+                }
+                
+                const searchData = await searchResponse.json();
+                
+                let videoSummaries = searchData.videos || searchData.results || [];
+                
+                if (!Array.isArray(videoSummaries) || videoSummaries.length === 0) {
+                    videoContainer.innerHTML = '<p>No video summaries found from the search API.</p>';
+                    return;
+                }
+
+                videoContainer.innerHTML = `<p>Found ${videoSummaries.length} videos. Retrieving detailed embed codes...</p>`;
+                
+                // --- STEP 2: Fetch details (including embed code) for each video ---
+                const detailPromises = videoSummaries.map(async (summary) => {
+                    const videoId = summary.id || summary.video_id || summary.uid; 
+                    
+                    if (!videoId) {
+                        console.error("Video summary missing ID:", summary);
+                        return null;
+                    }
+
+                    // --- 🛠️ THE 422 FIX IS HERE 🛠️ ---
+                    // We try 'uid' instead of 'id' to fix the 422 error, 
+                    // which indicates an incorrect parameter name.
+                    const detailParams = new URLSearchParams({ 
+                        uid: videoId 
+                    }).toString(); 
+                    // --- --------------------- ---
+                    
+                    const detailResponse = await fetch(`${DETAIL_URL}?${detailParams}`, requestOptions);
+
+                    if (!detailResponse.ok) {
+                        console.error(`Failed to fetch details for ID ${videoId}: ${detailResponse.status}`);
+                        return null;
+                    }
+
+                    const detailData = await detailResponse.json();
+                    return detailData;
+                });
+                
+                const detailedVideos = (await Promise.all(detailPromises)).filter(v => v !== null);
+
+                // --- STEP 3: Display the detailed videos ---
+                videoContainer.innerHTML = '';
+                
+                if (detailedVideos.length > 0) {
+                    detailedVideos.forEach(video => {
+                        const videoElement = document.createElement('div');
+                        videoElement.className = 'video-item';
+                        
+                        let embedContent = '<p class="error">Embed code not found in the detail API response.</p>';
+                        
+                        // Check for embed properties
+                        if (video.embed_code) {
+                            embedContent = video.embed_code;
+                        } else if (video.iframe) {
+                            embedContent = video.iframe;
+                        }
+                        else if (video.embed_url) { 
+                             embedContent = `<iframe src="${video.embed_url}" frameborder="0" class="video-player" scrolling="no" allowfullscreen></iframe>`;
+                        }
+                        else if (video.video_player) {
+                            embedContent = video.video_player;
+                        }
+
+                        videoElement.innerHTML = `
+                            <h4>${video.title || 'Untitled Video'}</h4>
+                            <div class="video-player">
+                                ${embedContent}
+                            </div>
+                            <p>ID: ${video.id || 'N/A'} | Duration: ${video.length_min || 'N/A'} mins</p>
+                            <hr>
+                        `;
+                        videoContainer.appendChild(videoElement);
+                    });
+                } else {
+                    videoContainer.innerHTML = '<p>Successfully fetched video IDs, but no detailed video information could be retrieved.</p>';
+                }
+
+            } catch (error) {
+                console.error('Fatal Error during API fetch:', error);
+                videoContainer.innerHTML = `
+                    <p class="error">A fatal error occurred. Check console (F12) for details.</p>
+                    <p class="error">Message: ${error.message}</p>
+                `;
+            }
+        }
+
+        // Initialize the app by checking login status
+        updateView();
+
+    </script>
+</body>
+</html>
