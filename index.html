@@ -3,72 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin-Only Video Viewer</title>
+    <title>Video Explorer & Debugger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Basic CSS for the layout */
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
-        #login-view, #video-view { 
-            padding: 30px; 
-            border: 1px solid #ddd; 
-            max-width: 700px; 
-            margin: 20px auto; 
-            background-color: white; 
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1f2937;
         }
-        #login-view { display: block; }
-        #video-view { display: none; } /* Hidden by default */
-        .video-item { margin-bottom: 25px; padding: 15px; border: 1px solid #eee; background-color: #fafafa; }
-        .video-player { width: 100%; height: 400px; margin-bottom: 15px; }
-        .error { color: #cc0000; font-weight: bold; }
-        input[type="text"], input[type="password"] { padding: 10px; margin-bottom: 10px; width: 90%; border: 1px solid #ccc; }
-        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        h1, h2 { color: #333; }
+        .video-player iframe {
+            width: 100%;
+            height: 250px;
+            min-height: 200px;
+        }
     </style>
 </head>
-<body>
+<body class="min-h-screen text-gray-100">
 
-    <div id="login-view">
-        <h1>Admin Login 🔑</h1>
-        <p>Use **admin** / **admin** to log in.</p>
-        <form id="loginForm">
-            <label for="username">Username:</label>
-            <input type="text" id="username" required><br>
-            <label for="password">Password:</label>
-            <input type="password" id="password" required><br><br>
-            <button type="submit">Login</button>
-            <p id="loginMessage" class="error"></p>
+    <!-- ============================================== -->
+    <!-- 1. Login View -->
+    <!-- ============================================== -->
+    <div id="login-view" class="p-8 md:p-12 bg-gray-800 rounded-2xl shadow-2xl max-w-lg mx-auto mt-20 transition-all duration-300">
+        <h1 class="text-4xl font-extrabold text-white mb-4 text-center">🔐 Login</h1>
+        <p class="text-gray-400 mb-8 text-center">Use <code class="font-mono text-cyan-400 font-semibold">admin</code> / <code class="font-mono text-cyan-400 font-semibold">admin</code> to begin exploring.</p>
+        <form id="loginForm" class="space-y-6">
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-300">Username</label>
+                <input type="text" id="username" required class="mt-1 block w-full px-4 py-3 border border-gray-600 bg-gray-700 text-white rounded-lg shadow-inner focus:outline-none focus:ring-cyan-500 focus:border-cyan-500 transition duration-150">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-300">Password</label>
+                <input type="password" id="password" required class="mt-1 block w-full px-4 py-3 border border-gray-600 bg-gray-700 text-white rounded-lg shadow-inner focus:outline-none focus:ring-cyan-500 focus:border-cyan-500 transition duration-150">
+            </div>
+            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-lg font-semibold text-gray-900 bg-cyan-400 hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-800 transition duration-150 ease-in-out">
+                Login
+            </button>
+            <p id="loginMessage" class="text-red-400 font-medium pt-2 text-center"></p>
         </form>
     </div>
 
-    <div id="video-view">
-        <h1>Welcome, Admin! 📽️</h1>
-        <button id="logoutButton">Logout</button>
-        <hr>
-        <h2>Eporner Video Feed</h2>
-        <div id="videoContainer">
-            <p>Loading videos...</p>
+    <!-- ============================================== -->
+    <!-- 2. Video View, Search & Controls -->
+    <!-- ============================================== -->
+    <div id="video-view" class="hidden p-4 md:p-8 max-w-7xl mx-auto">
+        
+        <!-- Header & Controls -->
+        <header class="bg-gray-800 p-4 rounded-xl shadow-xl mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
+            <h1 class="text-3xl font-extrabold text-cyan-400">Video Explorer</h1>
+            
+            <div class="flex flex-wrap items-center space-x-4">
+                
+                <!-- New: API Selector -->
+                <div class="flex items-center bg-gray-700 p-3 rounded-lg border border-gray-600">
+                    <label for="apiSelect" class="text-sm font-medium text-gray-300 mr-2 select-none">API:</label>
+                    <select id="apiSelect" class="bg-gray-700 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-1 border-none outline-none">
+                    </select>
+                </div>
+
+                <!-- New: Limit Selector -->
+                <div class="flex items-center bg-gray-700 p-3 rounded-lg border border-gray-600">
+                    <label for="limitSelect" class="text-sm font-medium text-gray-300 mr-2 select-none">Results:</label>
+                    <select id="limitSelect" class="bg-gray-700 text-white text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-1 border-none outline-none">
+                        <option value="6">6</option>
+                        <option value="12" selected>12</option>
+                        <option value="24">24</option>
+                    </select>
+                </div>
+
+                <!-- CORS Proxy Toggle (Remaining Control) -->
+                <div class="flex items-center bg-gray-700 p-3 rounded-lg border border-gray-600">
+                    <input type="checkbox" id="useProxy" class="h-5 w-5 text-cyan-400 border-gray-500 rounded focus:ring-cyan-400" checked>
+                    <label for="useProxy" class="ml-2 text-sm font-medium text-gray-300 select-none">
+                        Use CORS Proxy
+                    </label>
+                </div>
+
+                <button id="logoutButton" class="py-2 px-4 rounded-lg shadow-md text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition duration-150 ease-in-out">
+                    Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- Search Bar -->
+        <div class="mb-8">
+            <div class="flex">
+                <input type="text" id="searchQuery" placeholder="Search for videos (e.g., 'new releases', 'HD')" class="w-full px-5 py-3 border-2 border-cyan-400 bg-gray-700 text-white rounded-l-xl shadow-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 placeholder-gray-400 transition duration-150">
+                <button id="searchButton" class="flex-shrink-0 px-6 py-3 rounded-r-xl shadow-lg text-lg font-semibold text-gray-900 bg-cyan-400 hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition duration-150 ease-in-out">
+                    Search
+                </button>
+            </div>
+        </div>
+        
+        <!-- Video Display Area -->
+        <h2 id="feedTitle" class="text-2xl font-bold text-white mb-6">Top Rated Videos</h2>
+        <div id="videoContainer" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <p class="col-span-full text-gray-400">Loading videos...</p>
         </div>
     </div>
 
     <script>
+        
         // ==============================================
-        // 🚨 CONFIGURATION 🚨
+        // CONFIGURATION 
         // ==============================================
         
-        // YOUR API KEY
         const API_KEY = 'pAc_Uc2flizJZ15bUXweAQMQHBPjD3fRSG19bdecXj8'; 
-        
-        const SEARCH_URL = 'https://api.adultdatalink.com/eporner/search'; 
-        const DETAIL_URL = 'https://api.adultdatalink.com/eporner/video-information'; 
-        
+        const PROXY_URL = 'https://corsproxy.io/?'; 
+
+        const APIS = {
+            eporner: {
+                name: "Eporner API (Current)",
+                searchUrl: 'https://api.adultdatalink.com/eporner/search',
+                detailUrl: 'https://api.adultdatalink.com/eporner/video-information',
+                videoIdKey: 'video_id',
+                defaultQuery: 'top rated',
+                limit: 12
+            }
+        };
+
         const CREDENTIALS = {
             username: 'admin',
             password: 'admin'
         };
 
         // ==============================================
-        // DOM ELEMENTS AND VIEW SWITCHING
+        // DOM Elements and Initialization
         // ==============================================
         const loginView = document.getElementById('login-view');
         const videoView = document.getElementById('video-view');
@@ -76,20 +134,30 @@
         const logoutButton = document.getElementById('logoutButton');
         const loginMessage = document.getElementById('loginMessage');
         const videoContainer = document.getElementById('videoContainer');
+        const useProxyCheckbox = document.getElementById('useProxy');
+        const searchQueryInput = document.getElementById('searchQuery');
+        const searchButton = document.getElementById('searchButton');
+        const feedTitle = document.getElementById('feedTitle');
+        const apiSelect = document.getElementById('apiSelect');
+        const limitSelect = document.getElementById('limitSelect');
 
-        function updateView() {
-            if (localStorage.getItem('loggedIn') === 'true') {
-                loginView.style.display = 'none';
-                videoView.style.display = 'block';
-                if (videoContainer.children.length <= 1 || videoContainer.querySelector('.error')) {
-                    fetchVideos();
-                }
-            } else {
-                loginView.style.display = 'block';
-                videoView.style.display = 'none';
+        // ==============================================
+        // Helper Functions
+        // ==============================================
+
+        function setupApiControls() {
+            for (const key in APIS) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = APIS[key].name;
+                apiSelect.appendChild(option);
             }
         }
 
+        // ==============================================
+        // Event Listeners
+        // ==============================================
+        
         loginForm.addEventListener('submit', function(event) {
             event.preventDefault();
             const username = document.getElementById('username').value;
@@ -106,17 +174,56 @@
         logoutButton.addEventListener('click', function() {
             localStorage.removeItem('loggedIn');
             loginMessage.textContent = 'Logged out successfully.';
-            videoContainer.innerHTML = '<p>Loading videos...</p>'; 
+            videoContainer.innerHTML = '<p class="col-span-full text-gray-500">Loading videos...</p>'; 
             updateView();
+        });
+
+        searchButton.addEventListener('click', () => {
+            const query = searchQueryInput.value.trim() || APIS[apiSelect.value].defaultQuery;
+            fetchVideos(query);
+        });
+
+        searchQueryInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const query = searchQueryInput.value.trim() || APIS[apiSelect.value].defaultQuery;
+                fetchVideos(query);
+            }
+        });
+
+        apiSelect.addEventListener('change', () => {
+             const query = searchQueryInput.value.trim() || APIS[apiSelect.value].defaultQuery;
+             fetchVideos(query);
+        });
+
+        limitSelect.addEventListener('change', () => {
+             const query = searchQueryInput.value.trim() || APIS[apiSelect.value].defaultQuery;
+             fetchVideos(query);
         });
 
 
         // ==============================================
-        // 2. TWO-STEP API FETCH LOGIC (FIXED FOR 422)
+        // View and Main Fetch Logic
         // ==============================================
 
-        async function fetchVideos() {
-            videoContainer.innerHTML = '<p>Loading videos...</p>'; 
+        function updateView() {
+            if (localStorage.getItem('loggedIn') === 'true') {
+                loginView.style.display = 'none';
+                videoView.style.display = 'block';
+                setupApiControls();
+                fetchVideos(searchQueryInput.value.trim() || APIS[apiSelect.value].defaultQuery); 
+            } else {
+                loginView.style.display = 'block';
+                videoView.style.display = 'none';
+            }
+        }
+
+        async function fetchVideos(query) {
+            const selectedApi = APIS[apiSelect.value];
+            const useProxy = useProxyCheckbox.checked;
+            const limit = limitSelect.value;
+            
+            feedTitle.textContent = query === selectedApi.defaultQuery ? 'Top Rated Videos' : `Search Results for: "${query}"`;
+            videoContainer.innerHTML = '<p class="col-span-full text-cyan-400 font-medium flex items-center"><svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Fetching videos...</p>'; 
 
             const requestOptions = {
                 method: 'GET',
@@ -127,17 +234,16 @@
             };
 
             const searchParams = new URLSearchParams({
-                query: 'newest', 
-                limit: 5
+                query: query, 
+                limit: limit 
             }).toString();
             
             try {
-                // --- STEP 1: Get the list of video IDs ---
-                const searchResponse = await fetch(`${SEARCH_URL}?${searchParams}`, requestOptions);
+                const searchResponse = await fetch(`${selectedApi.searchUrl}?${searchParams}`, requestOptions);
                 
                 if (!searchResponse.ok) {
                     const errorText = await searchResponse.text();
-                    throw new Error(`Search Error ${searchResponse.status}. Response: ${errorText.substring(0, 100)}...`);
+                    throw new Error(`Search API failed (${searchResponse.status}): ${errorText.substring(0, 100)}...`);
                 }
                 
                 const searchData = await searchResponse.json();
@@ -145,30 +251,28 @@
                 let videoSummaries = searchData.videos || searchData.results || [];
                 
                 if (!Array.isArray(videoSummaries) || videoSummaries.length === 0) {
-                    videoContainer.innerHTML = '<p>No video summaries found from the search API.</p>';
+                    videoContainer.innerHTML = `<p class="col-span-full text-gray-400">No results found for "${query}".</p>`;
                     return;
                 }
 
-                videoContainer.innerHTML = `<p>Found ${videoSummaries.length} videos. Retrieving detailed embed codes...</p>`;
+                videoContainer.innerHTML = `<p class="col-span-full text-gray-500 mb-4">Found ${videoSummaries.length} videos. Retrieving details (Proxy: ${useProxy ? 'ON' : 'OFF'})...</p>`;
                 
-                // --- STEP 2: Fetch details (including embed code) for each video ---
                 const detailPromises = videoSummaries.map(async (summary) => {
                     const videoId = summary.id || summary.video_id || summary.uid; 
                     
-                    if (!videoId) {
-                        console.error("Video summary missing ID:", summary);
-                        return null;
+                    if (!videoId) return null;
+
+                    const detailParams = new URLSearchParams({ 
+                        [selectedApi.videoIdKey]: videoId 
+                    }).toString(); 
+                    
+                    let finalDetailUrl = `${selectedApi.detailUrl}?${detailParams}`;
+
+                    if (useProxy) {
+                        finalDetailUrl = `${PROXY_URL}${encodeURIComponent(finalDetailUrl)}`;
                     }
 
-                    // --- 🛠️ THE 422 FIX IS HERE 🛠️ ---
-                    // We try 'uid' instead of 'id' to fix the 422 error, 
-                    // which indicates an incorrect parameter name.
-                    const detailParams = new URLSearchParams({ 
-                        uid: videoId 
-                    }).toString(); 
-                    // --- --------------------- ---
-                    
-                    const detailResponse = await fetch(`${DETAIL_URL}?${detailParams}`, requestOptions);
+                    const detailResponse = await fetch(finalDetailUrl, requestOptions);
 
                     if (!detailResponse.ok) {
                         console.error(`Failed to fetch details for ID ${videoId}: ${detailResponse.status}`);
@@ -181,54 +285,54 @@
                 
                 const detailedVideos = (await Promise.all(detailPromises)).filter(v => v !== null);
 
-                // --- STEP 3: Display the detailed videos ---
                 videoContainer.innerHTML = '';
                 
                 if (detailedVideos.length > 0) {
                     detailedVideos.forEach(video => {
                         const videoElement = document.createElement('div');
-                        videoElement.className = 'video-item';
+                        videoElement.className = 'bg-gray-800 p-4 rounded-xl shadow-lg hover:shadow-cyan-500/50 transition duration-300 transform hover:-translate-y-1';
                         
-                        let embedContent = '<p class="error">Embed code not found in the detail API response.</p>';
+                        let embedContent = '<div class="video-player bg-gray-700 h-64 flex items-center justify-center rounded-lg"><p class="text-sm text-red-400 p-4">Embed code not found.</p></div>';
                         
-                        // Check for embed properties
                         if (video.embed_code) {
-                            embedContent = video.embed_code;
+                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${video.embed_code}</div>`;
                         } else if (video.iframe) {
-                            embedContent = video.iframe;
+                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${video.iframe}</div>`;
                         }
                         else if (video.embed_url) { 
-                             embedContent = `<iframe src="${video.embed_url}" frameborder="0" class="video-player" scrolling="no" allowfullscreen></iframe>`;
+                             embedContent = `<div class="video-player rounded-lg overflow-hidden"><iframe src="${video.embed_url}" frameborder="0" scrolling="no" allowfullscreen></iframe></div>`;
                         }
                         else if (video.video_player) {
-                            embedContent = video.video_player;
+                            embedContent = `<div class="video-player rounded-lg overflow-hidden">${video.video_player}</div>`;
                         }
 
                         videoElement.innerHTML = `
-                            <h4>${video.title || 'Untitled Video'}</h4>
-                            <div class="video-player">
-                                ${embedContent}
+                            <h4 class="text-lg font-semibold mb-3 text-white truncate">${video.title || 'Untitled Video'}</h4>
+                            ${embedContent}
+                            <div class="flex justify-between items-center mt-3 text-sm text-gray-400">
+                                <p>ID: <span class="font-mono text-xs text-cyan-400">${video.id || 'N/A'}</span></p>
+                                <p>Dur: <span class="font-bold">${video.length_min || 'N/A'}</span> min</p>
                             </div>
-                            <p>ID: ${video.id || 'N/A'} | Duration: ${video.length_min || 'N/A'} mins</p>
-                            <hr>
                         `;
                         videoContainer.appendChild(videoElement);
                     });
                 } else {
-                    videoContainer.innerHTML = '<p>Successfully fetched video IDs, but no detailed video information could be retrieved.</p>';
+                    videoContainer.innerHTML = '<p class="col-span-full text-orange-400 font-medium">Could not retrieve detailed video information. The CORS proxy might be unreliable.</p>';
                 }
 
             } catch (error) {
                 console.error('Fatal Error during API fetch:', error);
                 videoContainer.innerHTML = `
-                    <p class="error">A fatal error occurred. Check console (F12) for details.</p>
-                    <p class="error">Message: ${error.message}</p>
+                    <div class="col-span-full p-6 bg-red-800/30 border border-red-500 rounded-xl shadow-inner">
+                        <p class="font-bold text-red-400">FATAL ERROR</p>
+                        <p class="text-sm text-red-300">Could not fetch video list. Please check your API key or connectivity.</p>
+                        <p class="text-xs text-red-300 mt-2">Error: ${error.message}</p>
+                    </div>
                 `;
             }
         }
 
-        // Initialize the app by checking login status
-        updateView();
+        document.addEventListener('DOMContentLoaded', updateView);
 
     </script>
 </body>
